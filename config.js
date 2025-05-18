@@ -1,16 +1,20 @@
+require("dotenv").config();
+
 module.exports = {
     prefix: '!',
-    nodes: [{
-        host: "lavalink.jirayu.net",
-        password: "youshallnotpass",
-        port: 13592,
-        secure: false,
-        name: "Main Node"
-    }],
+    nodes: [
+        {
+            host: "lavalink.jirayu.net",
+            password: "youshallnotpass",
+            port: 13592,
+            secure: false,
+            name: "Main Node"
+        }
+    ],
     spotify: {
-        clientId: "a568b55af1d940aca52ea8fe02f0d93b",
-        clientSecret: "e8199f4024fe49c5b22ea9a3dd0c4789"
+        clientId: process.env.SPOTIFY_CLIENT_ID,
+        clientSecret: process.env.SPOTIFY_CLIENT_SECRET
     },
-    botToken: "MTM1NTc2MjkzNzcwODU0NDE0Mg.GN9hkj.8vyFcP0nGOmdlpL9lFyAHKZcP8GVCnszstI2fc",
+    botToken: process.env.BOT_TOKEN,
     embedColor: "#0061ff"
 };
