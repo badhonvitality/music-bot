@@ -44,17 +44,18 @@ app.get("/", (req, res) => {
     return res.status(503).send("<h1>Bot is starting...</h1>");
   }
 
-  // Build "Now Playing" info for each guild with an active player
+  // Build Now Playing info
   let nowPlayingList = "";
   client.riffy.players.forEach((player, guildId) => {
     const guild = client.guilds.cache.get(guildId);
     const currentTrack = player.queue.current;
+
     nowPlayingList += `
       <div class="guild">
         <h3>${guild ? guild.name : "Unknown Server"}</h3>
         <p><strong>Now Playing:</strong> ${
           currentTrack
-            ? `${currentTrack.info.title} — requested by ${currentTrack.info.requester.tag}`
+            ? `${currentTrack.info.title} — requested by ${currentTrack.info.requester?.tag || "Unknown"}`
             : "No track playing"
         }</p>
         <p><strong>Voice Channel:</strong> ${
@@ -73,6 +74,7 @@ app.get("/", (req, res) => {
     <html>
     <head>
       <title>🤖 Vitality Bot Status</title>
+      <meta http-equiv="refresh" content="10" />  <!-- Auto refresh every 10 seconds -->
       <style>
         body {
           font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
