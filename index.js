@@ -1,3 +1,7 @@
+const express = require('express');
+const app = express();
+const port = process.env.PORT || 3000;
+
 const { Client, GatewayDispatchEvents } = require("discord.js");
 const { Riffy } = require("riffy");
 const { Spotify } = require("riffy-spotify");
@@ -29,6 +33,28 @@ client.riffy = new Riffy(client, config.nodes, {
     defaultSearchPlatform: "ytmsearch",
     restVersion: "v4",
     plugins: [spotify]
+});
+
+// Express route for bot status page
+app.get("/", (req, res) => {
+    if (!client.user) {
+        return res.status(503).send("Bot is starting...");
+    }
+
+    res.send(`
+        <h1>🤖 Vitality Bot Status</h1>
+        <ul>
+            <li><strong>Bot Name:</strong> ${client.user.tag}</li>
+            <li><strong>Bot ID:</strong> ${client.user.id}</li>
+            <li><strong>Status:</strong> Online ✅</li>
+            <li><strong>Servers:</strong> ${client.guilds.cache.size}</li>
+            <li><strong>Uptime:</strong> ${Math.floor(process.uptime() / 60)} minutes</li>
+        </ul>
+    `);
+});
+
+app.listen(port, () => {
+    console.log(`🌐 Web status running at http://localhost:${port}`);
 });
 
 // Command definitions for help command
@@ -275,4 +301,4 @@ client.on("raw", (d) => {
     client.riffy.updateVoiceState(d);
 });
 
-client.login(config.botToken); 
+client.login(config.botToken);
