@@ -1,150 +1,168 @@
+// index.js
 const express = require("express");
 const app = express();
 const port = process.env.PORT || 3000;
+const path = require("path");
+const fs = require("fs");
 
-const { Client, GatewayDispatchEvents } = require("discord.js");
+const { Client, GatewayDispatchEvents, Partials, GatewayIntentBits } = require("discord.js");
 const { Riffy } = require("riffy");
 const { Spotify } = require("riffy-spotify");
-const config = require("./config.js"); // your config with botToken, spotify keys, prefix, nodes
-const messages = require("./utils/messages.js"); // your message helpers
-const emojis = require("./emojis.js"); // your emoji helpers
 
-// Create Discord client
+const config = require("./config.js");
+const messages = require("./utils/messages.js");
+const emojis = require("./emojis.js");
+
+// Middleware setup
+app.use(express.static("public"));
+app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
+
+// Error logging
+const errorLogPath = path.join(__dirname, "logs", "errors.log");
+fs.mkdirSync(path.dirname(errorLogPath), { recursive: true });
+
+function logError(err) {
+  const logEntry = `[${new Date().toISOString()}] ${err}\n`;
+  fs.appendFileSync(errorLogPath, logEntry);
+}
+
+// Discord client setup
 const client = new Client({
   intents: [
-    "Guilds",
-    "GuildMessages",
-    "GuildVoiceStates",
-    "GuildMessageReactions",
-    "MessageContent",
-    "DirectMessages",
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.GuildVoiceStates,
+    GatewayIntentBits.GuildMessageReactions,
+    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.DirectMessages
   ],
+  partials: [Partials.Channel]
 });
 
-// Setup Spotify plugin
+// Spotify plugin
 const spotify = new Spotify({
   clientId: config.spotify.clientId,
-  clientSecret: config.spotify.clientSecret,
+  clientSecret: config.spotify.clientSecret
 });
 
-// Initialize Riffy (music handler)
+// Riffy setup
 client.riffy = new Riffy(client, config.nodes, {
   send: (payload) => {
     const guild = client.guilds.cache.get(payload.d.guild_id);
-    if (guild) guild.shard.send(payload);
+    if (guild?.shard) guild.shard.send(payload);
   },
   defaultSearchPlatform: "ytmsearch",
   restVersion: "v4",
-  plugins: [spotify],
+  plugins: [spotify]
 });
 
-// Express route for status page
+// Home page route
 app.get("/", (req, res) => {
-  if (!client.user) {
-    return res.status(503).send("<h1>Bot is starting...</h1>");
-  }
-
-  // Build Now Playing info
-  let nowPlayingList = "";
-  client.riffy.players.forEach((player, guildId) => {
-    const guild = client.guilds.cache.get(guildId);
-    const currentTrack = player.queue.current;
-
-    nowPlayingList += `
-      <div class="guild">
-        <h3>${guild ? guild.name : "Unknown Server"}</h3>
-        <p><strong>Now Playing:</strong> ${
-          currentTrack
-            ? `${currentTrack.info.title} — requested by ${currentTrack.info.requester?.tag || "Unknown"}`
-            : "No track playing"
-        }</p>
-        <p><strong>Voice Channel:</strong> ${
-          guild
-            ? guild.channels.cache.get(player.voiceChannel)?.name || "Unknown"
-            : "Unknown"
-        }</p>
+  const playersHTML = Array.from(client.riffy.players.values()).map((player) => {
+    const guild = client.guilds.cache.get(player.guildId);
+    const track = player.queue.current;
+    return `
+      <div class="bg-gray-800 p-4 rounded-lg shadow-md mb-4">
+        <h3 class="text-xl font-semibold text-green-400">${guild?.name || "Unknown Server"}</h3>
+        <p class="text-sm text-gray-300">🎶 Now Playing: <strong>${track?.info?.title || "None"}</strong></p>
+        <p class="text-sm text-gray-300">🔊 Voice Channel: <strong>${guild?.channels.cache.get(player.voiceChannel)?.name || "Unknown"}</strong></p>
       </div>
-      <hr />
     `;
-  });
+  }).join("") || "<p class='text-gray-300'>No active players.</p>";
 
-  const uptimeMinutes = Math.floor(process.uptime() / 60);
-
-  res.send(`
-    <html>
+  const html = `
+    <!DOCTYPE html>
+    <html lang="en">
     <head>
-      <title>🤖 Vitality Bot Status</title>
-      <meta http-equiv="refresh" content="10" />  <!-- Auto refresh every 10 seconds -->
-      <style>
-        body {
-          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-          background: #121212;
-          color: #eee;
-          margin: 0; padding: 20px;
-          max-width: 800px;
-          margin-left: auto;
-          margin-right: auto;
-        }
-        h1 {
-          color: #00e676;
-          text-align: center;
-        }
-        ul {
-          list-style: none;
-          padding: 0;
-        }
-        ul li {
-          padding: 8px 0;
-          font-size: 1.1em;
-        }
-        .guild {
-          margin-bottom: 15px;
-          background: #1e1e1e;
-          padding: 15px;
-          border-radius: 8px;
-          box-shadow: 0 0 8px rgba(0, 230, 118, 0.3);
-        }
-        hr {
-          border: 0;
-          border-top: 1px solid #333;
-          margin: 15px 0;
-        }
-        p strong {
-          color: #00e676;
-        }
-        footer {
-          text-align: center;
-          margin-top: 30px;
-          font-size: 0.9em;
-          color: #777;
-        }
-      </style>
+      <meta charset="UTF-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <meta http-equiv="refresh" content="10">
+      <title>Vitality Bot Dashboard</title>
+      <script src="https://cdn.tailwindcss.com"></script>
     </head>
-    <body>
-      <h1>🤖 Vitality Bot Status</h1>
-      <ul>
-        <li><strong>Bot Name:</strong> ${client.user.tag}</li>
-        <li><strong>Bot ID:</strong> ${client.user.id}</li>
-        <li><strong>Status:</strong> Online ✅</li>
-        <li><strong>Servers:</strong> ${client.guilds.cache.size}</li>
-        <li><strong>Uptime:</strong> ${uptimeMinutes} minutes</li>
-      </ul>
+    <body class="bg-gray-900 text-white font-sans">
+      <div class="max-w-3xl mx-auto p-4">
+        <h1 class="text-3xl text-green-400 font-bold mb-6 text-center">Vitality Bot Status</h1>
+        <ul class="mb-6 text-gray-300">
+          <li><strong>Bot:</strong> ${client.user?.tag || "Starting..."}</li>
+          <li><strong>ID:</strong> ${client.user?.id || "Loading..."}</li>
+          <li><strong>Status:</strong> ✅ Online</li>
+          <li><strong>Servers:</strong> ${client.guilds.cache.size}</li>
+          <li><strong>Uptime:</strong> ${Math.floor(process.uptime() / 60)} minutes</li>
+        </ul>
+        <h2 class="text-xl text-green-300 mb-2">Now Playing:</h2>
+        ${playersHTML}
 
-      <h2>Now Playing in Servers</h2>
-      ${nowPlayingList || "<p>No music is playing currently.</p>"}
+        <h2 class="text-xl text-green-300 mt-8 mb-2">Request a Song</h2>
+        <form method="POST" action="/request" class="bg-gray-800 p-4 rounded">
+          <input name="query" placeholder="Enter song name or link" required class="w-full p-2 rounded bg-gray-700 text-white mb-2" />
+          <input name="guildId" placeholder="Guild ID" required class="w-full p-2 rounded bg-gray-700 text-white mb-2" />
+          <input name="voiceChannel" placeholder="Voice Channel ID" required class="w-full p-2 rounded bg-gray-700 text-white mb-2" />
+          <button type="submit" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded">Request</button>
+        </form>
 
-      <footer>
-        <p>Made with ❤️ by Badhon Vitality</p>
-      </footer>
+        <h2 class="text-xl text-green-300 mt-8 mb-2">Error Logs</h2>
+        <pre class="bg-gray-800 p-4 rounded h-64 overflow-y-scroll text-sm">${fs.existsSync(errorLogPath) ? fs.readFileSync(errorLogPath, "utf-8") : "No errors logged."}</pre>
+      </div>
     </body>
     </html>
-  `);
+  `;
+
+  res.send(html);
 });
 
-// Start Express server
-app.listen(port, () => {
-  console.log(`🌐 Web status running at http://localhost:${port}`);
+// Handle song request from dashboard
+app.post("/request", async (req, res) => {
+  const { query, guildId, voiceChannel } = req.body;
+  const guild = client.guilds.cache.get(guildId);
+  if (!guild) return res.status(400).send("Invalid Guild ID");
+
+  try {
+    const player = client.riffy.createConnection({
+      guildId,
+      voiceChannel,
+      textChannel: null,
+      deaf: true
+    });
+
+    const result = await client.riffy.resolve({ query, requester: { tag: "Web User" } });
+    if (!result?.tracks?.length) return res.status(404).send("No tracks found");
+
+    result.tracks.forEach(track => {
+      track.info.requester = { tag: "Web User" };
+      player.queue.add(track);
+    });
+
+    if (!player.playing && !player.paused) player.play();
+
+    res.send("Track(s) added to queue!");
+  } catch (err) {
+    logError(err.stack || err);
+    res.status(500).send("Error handling song request.");
+  }
 });
+
+// Start server
+app.listen(port, () => {
+  console.log(`🌐 Web dashboard running at http://localhost:${port}`);
+});
+
+// Discord client events
+client.on("ready", () => {
+  client.riffy.init(client.user.id);
+  console.log(`${emojis.success} Logged in as ${client.user.tag}`);
+});
+
+client.on("raw", (d) => {
+  if (![GatewayDispatchEvents.VoiceStateUpdate, GatewayDispatchEvents.VoiceServerUpdate].includes(d.t)) return;
+  client.riffy.updateVoiceState(d);
+});
+
+// Global error handling
+process.on("uncaughtException", err => logError(err.stack || err));
+process.on("unhandledRejection", reason => logError(reason instanceof Error ? reason.stack : reason));
+
 // Command definitions for help command
 const commands = [
     { name: 'play <query>', description: 'Play a song or playlist' },
