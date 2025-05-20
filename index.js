@@ -94,13 +94,6 @@ app.get("/", (req, res) => {
         <h2 class="text-xl text-green-300 mb-2">Now Playing:</h2>
         ${playersHTML}
 
-        <h2 class="text-xl text-green-300 mt-8 mb-2">Request a Song</h2>
-        <form method="POST" action="/request" class="bg-gray-800 p-4 rounded">
-          <input name="query" placeholder="Enter song name or link" required class="w-full p-2 rounded bg-gray-700 text-white mb-2" />
-          <input name="guildId" placeholder="Guild ID" required class="w-full p-2 rounded bg-gray-700 text-white mb-2" />
-          <input name="voiceChannel" placeholder="Voice Channel ID" required class="w-full p-2 rounded bg-gray-700 text-white mb-2" />
-          <button type="submit" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded">Request</button>
-        </form>
 
         <h2 class="text-xl text-green-300 mt-8 mb-2">Error Logs</h2>
         <pre class="bg-gray-800 p-4 rounded h-64 overflow-y-scroll text-sm">${fs.existsSync(errorLogPath) ? fs.readFileSync(errorLogPath, "utf-8") : "No errors logged."}</pre>
@@ -112,36 +105,6 @@ app.get("/", (req, res) => {
   res.send(html);
 });
 
-// Handle song request from dashboard
-app.post("/request", async (req, res) => {
-  const { query, guildId, voiceChannel } = req.body;
-  const guild = client.guilds.cache.get(guildId);
-  if (!guild) return res.status(400).send("Invalid Guild ID");
-
-  try {
-    const player = client.riffy.createConnection({
-      guildId,
-      voiceChannel,
-      textChannel: null,
-      deaf: true
-    });
-
-    const result = await client.riffy.resolve({ query, requester: { tag: "Web User" } });
-    if (!result?.tracks?.length) return res.status(404).send("No tracks found");
-
-    result.tracks.forEach(track => {
-      track.info.requester = { tag: "Web User" };
-      player.queue.add(track);
-    });
-
-    if (!player.playing && !player.paused) player.play();
-
-    res.send("Track(s) added to queue!");
-  } catch (err) {
-    logError(err.stack || err);
-    res.status(500).send("Error handling song request.");
-  }
-});
 
 // Start server
 app.listen(port, () => {
